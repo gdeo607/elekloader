@@ -108,6 +108,9 @@ DEVICE = Device(
     ddr=(0x47F00000, 0x47F40000),
     sram_code=(0x8000F100, 0x80010000),
     fast_table='core_fast',                     # declared and copied by core-dt2 (fast.s)
+    # core-dt2 2.x's added machines (types 7-23): a descriptor names its type at +0, an SDK machine its id
+    slot_claims=(('core_machines', 0, 128, 'machine'), ('sdk_alpha_machines', 0, 128, 'machine')),
+    table_limits={'sdk_alpha_machines': 16},   # core-dt2 2.7's SDK machines
     recovery=('hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
               'then send the stock .syx over MIDI (not USB)'),
     toolchain={

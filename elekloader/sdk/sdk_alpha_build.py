@@ -18,7 +18,10 @@ from elekloader.sdk import build
 # that also needs a native descriptor (the Digitakt's core_machines: a struct cm_machine the builder
 # writes). Every machine goes to the companion's table SDK_ALPHA_TABLE; claims come from the profile's
 # slot_claims, and how many machines it holds from its table_limits. The refusals and the tests derive from it.
-Target = collections.namedtuple('Target', 'companions first_id features native')
+# last_id and knobs, when a release holds fewer: its highest machine id, and the most knobs a machine
+# may have (where its knobs keep their values).
+Target = collections.namedtuple('Target', 'companions first_id features native last_id knobs',
+                                defaults=(127, 15))
 SDK_ALPHA_TARGETS = {
     ('digitakt-mk1', '1.54'): Target(('core', 'machine-pages'), 4,
                                      frozenset(('render', 'defaults', 'mono', 'midi_cc')), 'core_machines'),
@@ -28,6 +31,9 @@ SDK_ALPHA_TARGETS = {
     # ELEK_TARGET_SHARC and .render names a label in mod.json's "sharc": {"sources": [...]}
     ('digitone-mk2', '1.12'): Target(('core', 'machines-dn2'), 5, frozenset(('kernels', 'defaults', 'mono', 'midi_cc')),
                                      None),
+    # the Digitakt II: core-dt2 2.7 (gdeo607/Digi2Core) holds the SDK machines itself. Its added machine types are
+    # 7..23, and a synth machine keeps its values in twelve places of a sound (SRC page 1 A-H and page 2's four)
+    ('digitakt-mk2', '1.17'): Target(('core',), 7, frozenset(('defaults',)), None, last_id=23, knobs=12),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines
@@ -272,7 +278,7 @@ def sdk_alpha_build(moddir, stock, out=None):
             names = {d.key: d.name for d in devices.devices()}
             supported = ['%s OS %s' % (names[d], v) for d, v in SDK_ALPHA_TARGETS]
             raise build.BuildError('sdk alpha: only %s and %s are supported' % (', '.join(supported[:-1]), supported[-1]))
-        companions, low, features, native = SDK_ALPHA_TARGETS[device, release]
+        companions, low, features, native, high, knob_max = SDK_ALPHA_TARGETS[device, release]
         tables = (SDK_ALPHA_TABLE,) + ((native,) if native else ())
         image = formats.main_image(firmware, dev)
         sections = {s: elemod.parts_bytes(d['parts'], image, dev)
@@ -295,8 +301,11 @@ def sdk_alpha_build(moddir, stock, out=None):
                                    % ', '.join(unresolved))
         for mid, layout in layouts.items():
             where = 'sdk alpha: machine %s (id %d)' % (json.dumps(layout['name']), mid)
-            if mid < low:
-                raise build.BuildError('%s: id %d is outside %d..127 on %s %s' % (where, mid, low, device, release))
+            if not low <= mid <= high:
+                raise build.BuildError('%s: id %d is outside %d..%d on %s %s' % (where, mid, low, high, device, release))
+            if len(layout['knobs']) > knob_max:
+                raise build.BuildError('%s: has %d knobs; %s %s keeps at most %d'
+                                       % (where, len(layout['knobs']), device, release, knob_max))
             if layout['render'] and not features & {'render', 'kernels'}:
                 raise build.BuildError('%s: render is not supported on %s %s yet' % (where, device, release))
             if layout['play'] and 'mono' not in features:

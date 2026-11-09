@@ -157,6 +157,9 @@ export const DIGITAKT_MK2: Device = {
   // ddr-low: below the linker's area, above the DSP buffers; what mods that place code at fixed addresses claim
   areas: { ddr: [0x47f00000, 0x47f40000], 'ddr-low': [0x47e7b000, 0x47f00000], 'sram-tail': [0x8000f100, 0x80010000], 'sram-block': [0x80006e80, 0x80008000] },
   ddr: [0x47f00000, 0x47f40000], sramCode: [0x8000f100, 0x80010000], fastTable: 'core_fast',
+  // core-dt2 2.x's added machines (types 7-23): a descriptor names its type at +0, an SDK machine its id
+  slotClaims: [['core_machines', 0, 128, 'machine'], ['sdk_alpha_machines', 0, 128, 'machine']],
+  tableLimits: { sdk_alpha_machines: 16 },   // core-dt2 2.7's SDK machines
   recovery: 'hold FUNC while powering on for the STARTUP menu, press TRIG 4 (OS UPGRADE), '
     + 'then send the stock .syx over MIDI (not USB)',
 }
