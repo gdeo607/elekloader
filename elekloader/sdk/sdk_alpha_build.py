@@ -34,8 +34,10 @@ SDK_ALPHA_TARGETS = {
     # the Digitakt II: core-dt2 2.7 (gdeo607/Digi2Core) holds the SDK machines itself. Its added machine types are
     # 7..23, and a synth machine keeps its values in twelve places of a sound (SRC page 1 A-H and page 2's four)
     # Its render is the Digitone II's SHARC assembly, placed as a raw SHARC payload ('kernels_raw',
-    # sdk_alpha_raw) with a stub core's sdk_dsp runs around it
-    ('digitakt-mk2', '1.17'): Target(('core',), 7, frozenset(('kernels_raw', 'defaults')), None, last_id=23, knobs=12),
+    # sdk_alpha_raw) with a stub core's sdk_dsp runs around it. Mono machines and MIDI CCs: core-dt2 2.7's
+    # ev_live_note and ev_midi_cc, the CCs and a legato's bend to the DSP in a mailbox in the frame
+    ('digitakt-mk2', '1.17'): Target(('core',), 7, frozenset(('kernels_raw', 'defaults', 'mono', 'midi_cc')), None,
+                                     last_id=23, knobs=12),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines

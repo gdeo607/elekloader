@@ -16,8 +16,8 @@ change, and mods must be rebuilt when it does.
 | Machine ids, knobs | 0..127, 15 | 0..127, 15 | 5..127, 15 | 7..23, 12 |
 | Pages, labels, hiding, glyphs | yes | yes | yes | yes |
 | `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) | yes, the Digitone II's SHARC assembly ([on the Digitakt II](#render-on-the-digitakt-ii)) |
-| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine | no |
-| MIDI CCs in `render` (`v->cc`) | yes | yes | yes | no: every `cc[n]` is -1 |
+| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs) |
+| MIDI CCs in `render` (`v->cc`) | yes | yes | yes | yes |
 
 Other devices and OS releases are not SDK targets. The builder's `SDK_ALPHA_TARGETS`
 (elekloader/sdk/sdk_alpha_build.py) is the table it enforces. The
@@ -244,7 +244,8 @@ its Digitone II SHARC render.
 - The stock still applies the CC: a knob's CC still turns the knob. The
   machine decides what any CC means to it.
 - On the Digitakt mk1, knob ids 0-7 take CC 16-23 and ids 8-14 CC 24-30,
-  in knob id order (machine-pages 1.10).
+  in knob id order (machine-pages 1.10). On the Digitakt II, CC 16-23 turn
+  SRC page 1's knobs A-H; page 2's knobs take none.
 - A voice changes machine at the track's next note. Its first render on
   the machine gets the CCs that came since its track took that machine,
   so a CC sent after choosing the machine reaches its first note.
@@ -352,8 +353,10 @@ for each machine (`sdk/sdk_alpha_raw.py`): its voice routine in core-dt2's
 DSP code, registered for the machine's type. core-dt2 2.7's `sdk_dsp`
 gives the routine its voice: each knob from where its value is kept (page
 1's A–H, then page 2's four slots), `pitch`, `velocity`, `start` in the
-block after a note-on (whose own block is silent), 256 bytes of `state`, and
-`idle` 0. The odd voice of a track copies the even one, as for core-dt2's
+block after a note-on (whose own block is silent), 256 bytes of `state`,
+`idle` 0, and `cc`: core's ColdFire side posts each CC the unit receives
+in a mailbox in the frame it sends the DSP, past the part the stock reads.
+A mono machine's legato move reaches `pitch` the same way. The odd voice of a track copies the even one, as for core-dt2's
 other machines. The assembly may not hold an address in its data (a `.VAR`
 naming a label); load addresses in code.
 
@@ -384,7 +387,9 @@ live keys, and keeps at most 16 held keys a track; a press past them drops
 the oldest. On the Digitone II the OS does: machines-dn2 sets the track's
 PLAY MODE and MONO NOTE PRIO to the machine's values (`ELEK_POLY` sets
 POLY and leaves MONO NOTE PRIO), and puts them back after a change in TRK
-SETUP. A track whose machine is not an SDK machine keeps its settings. See
+SETUP. A track whose machine is not an SDK machine keeps its settings. On
+the Digitakt II core-dt2 carries them out on live keys, as on the mk1s;
+a legato move changes the pitch the DSP gives `render`. See
 [sdk-mono](../examples/sdk-mono/mono.c).
 
 ### Limits and refusals
