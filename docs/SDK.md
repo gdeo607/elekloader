@@ -7,19 +7,19 @@ the native machine selector, pages, parameters and LFO destinations. The
 mod names no firmware address and no hook site. The API is alpha: it may
 change, and mods must be rebuilt when it does.
 
-| | Digitakt mk1 | Digitone mk1 / Keys | Digitone II |
-|---|---|---|---|
-| Stock OS | 1.54 | 1.44 | 1.12 |
-| Core and companion | `mods/core` (4.3 or later), `mods/machine-pages` | `mods/core-dn1` (5.3 or later), `mods/machines-dn1` | `mods/core-dn2` (0.4 or later), `mods/machines-dn2` |
-| Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL |
-| Its pages show on | SRC | SYN2, in place of its pages on that track | SYN |
-| Pages, labels, hiding, glyphs | yes | yes | yes |
-| `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) |
-| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine |
-| MIDI CCs in `render` (`v->cc`) | yes | yes | yes |
+| | Digitakt mk1 | Digitone mk1 / Keys | Digitone II | Digitakt II (experimental) |
+|---|---|---|---|---|
+| Stock OS | 1.54 | 1.44 | 1.12 | 1.17 |
+| Core and companion | `mods/core` (4.3 or later), `mods/machine-pages` | `mods/core-dn1` (5.3 or later), `mods/machines-dn1` | `mods/core-dn2` (0.4 or later), `mods/machines-dn2` | core-dt2 2.7 ([gdeo607/Digi2Core](https://github.com/gdeo607/Digi2Core)), no companion |
+| Choose a machine | FUNC+SRC machine menu | hold a track key, Mod Menu → MACHINES | FUNC+SYN → MACHINE SEL | FUNC+SRC machine menu |
+| Its pages show on | SRC | SYN2, in place of its pages on that track | SYN | SRC (two pages at most) |
+| Machine ids, knobs | 0..127, 15 | 0..127, 15 | 5..127, 15 | 7..23, 12 |
+| Pages, labels, hiding, glyphs | yes | yes | yes | yes |
+| `render` and knob defaults | yes | yes | yes, `render` in SHARC assembly ([`render` on the Digitone II](#render-on-the-digitone-ii)) | yes, the Digitone II's SHARC assembly ([on the Digitakt II](#render-on-the-digitakt-ii)) |
+| Mono machines ([`play` and `prio`](#play-and-prio)) | yes, live keys (the trig keys, keyboard mode, MIDI notes; not the sequencer's trigs) | yes, live keys (KEYBOARD mode, MIDI notes; not the sequencer's trigs), and one voice a track | yes: the track's own PLAY MODE and MONO NOTE PRIO, which machines-dn2 sets from the machine | no |
+| MIDI CCs in `render` (`v->cc`) | yes | yes | yes | no: every `cc[n]` is -1 |
 
-Other devices and OS releases, the Digitakt II among them, are not SDK
-targets. The builder's `SDK_ALPHA_TARGETS`
+Other devices and OS releases are not SDK targets. The builder's `SDK_ALPHA_TARGETS`
 (elekloader/sdk/sdk_alpha_build.py) is the table it enforces. The
 [header](../elekloader/sdk/include/elekloader/sdk_alpha_machine.h) has
 every type and field. For other kinds of mod, start with
@@ -341,6 +341,21 @@ NOP;
 It runs on the synths' 4 KiB stack in L1, which interrupts share; a call
 that overruns it mutes that machine
 ([MACHINES-DN2-VOICE.md](MACHINES-DN2-VOICE.md#context-and-memory)).
+
+### `render` on the Digitakt II
+
+The Digitakt II plays the same assembly as the Digitone II: the same
+`"sharc": {"sources": [...]}`, the same label, the same `struct elek_voice`
+and the same calling rules (above). The builder assembles the sources with
+the pinned Selache, reads each object (`sdk/sharc_doj.py`) and adds a stub
+for each machine (`sdk/sdk_alpha_raw.py`): its voice routine in core-dt2's
+DSP code, registered for the machine's type. core-dt2 2.7's `sdk_dsp`
+gives the routine its voice: each knob from where its value is kept (page
+1's A–H, then page 2's four slots), `pitch`, `velocity`, `start` in the
+block after a note-on (whose own block is silent), 256 bytes of `state`, and
+`idle` 0. The odd voice of a track copies the even one, as for core-dt2's
+other machines. The assembly may not hold an address in its data (a `.VAR`
+naming a label); load addresses in code.
 
 ### `play` and `prio`
 

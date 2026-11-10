@@ -33,7 +33,9 @@ SDK_ALPHA_TARGETS = {
                                      None),
     # the Digitakt II: core-dt2 2.7 (gdeo607/Digi2Core) holds the SDK machines itself. Its added machine types are
     # 7..23, and a synth machine keeps its values in twelve places of a sound (SRC page 1 A-H and page 2's four)
-    ('digitakt-mk2', '1.17'): Target(('core',), 7, frozenset(('defaults',)), None, last_id=23, knobs=12),
+    # Its render is the Digitone II's SHARC assembly, placed as a raw SHARC payload ('kernels_raw',
+    # sdk_alpha_raw) with a stub core's sdk_dsp runs around it
+    ('digitakt-mk2', '1.17'): Target(('core',), 7, frozenset(('kernels_raw', 'defaults')), None, last_id=23, knobs=12),
 }
 SDK_ALPHA_TABLE = 'sdk_alpha_machines'   # pointers to struct elek_machine, read by each companion
 SDK_ALPHA_ABI = 'sdk_alpha_abi_v1'       # the one symbol the companions export to SDK machines
@@ -214,10 +216,11 @@ def sdk_alpha_registrations(doc, sections):
     return layouts
 
 
-def sdk_alpha_sharc(doc, layouts, moddir, spec, work, target):
-    """A 'kernels' target's render: each machine's .render names a global label of the mod's SHARC
-    assembly (mod.json's "sharc": {"sources": [...]}), which the DSP calls as C would. Puts the kernels
-    in doc['sharc'], and points each .render, which the ColdFire never calls, at an rts."""
+def sdk_alpha_sharc(doc, layouts, moddir, spec, work, target, raw=None):
+    """A 'kernels' or 'kernels_raw' target's render: each machine's .render names a global label of the
+    mod's SHARC assembly (mod.json's "sharc": {"sources": [...]}), which the DSP calls as C would. Puts the
+    kernels in doc['sharc'] or, with raw (the device's SHARC profile), the raw payload in doc['sharc_raw']
+    (sdk_alpha_raw), and points each .render, which the ColdFire never calls, at an rts."""
     sources = [os.path.join(moddir, n) for n in (spec.get('sources', []) if isinstance(spec, dict) else [])]
     labels = set()
     for path in sources:
@@ -241,9 +244,15 @@ def sdk_alpha_sharc(doc, layouts, moddir, spec, work, target):
             kernels.append(('sdk', mid, label, [(k['min'], k['max']) for k in layout['knobs']]))
     if not kernels:
         return
-    from elekloader.sdk import sharc
+    from elekloader.sdk import sharc, sdk_alpha_raw
     try:
-        doc['sharc'] = sharc.kernel_artifact(sources, work, kernels=kernels)
+        if raw is None:
+            doc['sharc'] = sharc.kernel_artifact(sources, work, kernels=kernels)
+        else:
+            if doc.get('sharc_raw'):
+                raise build.BuildError('sdk alpha: mod.json has a sharc_raw of its own; the builder writes it')
+            machines = [(mid, label, ranges, sdk_alpha_raw.slots(layouts[mid])) for _k, mid, label, ranges in kernels]
+            doc['sharc_raw'] = sdk_alpha_raw.raw_doc(sources, machines, work, raw['sdk_selector'])
     except ValueError as e:
         raise build.BuildError(str(e)) from e
     run = doc['sections']['.run']
@@ -265,7 +274,7 @@ def sdk_alpha_build(moddir, stock, out=None):
     if listed is not None and {'device', 'os'} & set(source):
         raise build.BuildError('mod.json: "devices" replaces "device" and "os"; give one or the other')
     firmware, dev, rel = formats.load(stock)
-    kernels = 'kernels' in getattr(SDK_ALPHA_TARGETS.get((dev.key, rel.version)), 'features', ())
+    kernels = {'kernels', 'kernels_raw'} & set(getattr(SDK_ALPHA_TARGETS.get((dev.key, rel.version)), 'features', ()))
     with tempfile.TemporaryDirectory(prefix='sdk-alpha-') as tmp:
         path, mod = build.build(moddir, stock, tmp, {'cflags': ['-DELEK_TARGET_SHARC']} if kernels else None)
         with open(path) as fh:
@@ -289,7 +298,8 @@ def sdk_alpha_build(moddir, stock, out=None):
             raise build.BuildError('sdk alpha: %s %s holds at most %d SDK machines; this mod registers %d'
                                    % (device, release, limit, len(layouts)))
         if kernels:
-            sdk_alpha_sharc(doc, layouts, moddir, source.get('sharc'), tmp, '%s %s' % (device, release))
+            sdk_alpha_sharc(doc, layouts, moddir, source.get('sharc'), tmp, '%s %s' % (device, release),
+                            rel.sharc if 'kernels_raw' in features else None)
         unresolved = sorted(set(doc['imports']) - {SDK_ALPHA_ABI})
         soft_float = [n for n in unresolved if re.fullmatch(r'__\w*?[sdtx]f\w*', n)]    # libgcc's
         if soft_float:
@@ -306,7 +316,7 @@ def sdk_alpha_build(moddir, stock, out=None):
             if len(layout['knobs']) > knob_max:
                 raise build.BuildError('%s: has %d knobs; %s %s keeps at most %d'
                                        % (where, len(layout['knobs']), device, release, knob_max))
-            if layout['render'] and not features & {'render', 'kernels'}:
+            if layout['render'] and not features & {'render', 'kernels', 'kernels_raw'}:
                 raise build.BuildError('%s: render is not supported on %s %s yet' % (where, device, release))
             if layout['play'] and 'mono' not in features:
                 raise build.BuildError('%s: %s is not supported on %s %s yet'

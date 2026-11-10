@@ -84,6 +84,9 @@ DEVICE = Device(
                               (0x2831c000, 0x28320000, 'L1 block 2 cache'),
                               (0x2839c000, 0x283a0000, 'L1 block 3 cache')),
                 'raw': True,
+                # the sample selector of MANUAL SLICE (type 6), which core-dt2's added machines clone: the
+                # core_mf_selector row of an SDK machine with render (sdk_alpha_raw), as STRING's
+                'sdk_selector': 0x282567d8,
                 'owned_ranges': ((0x2001ab7c, 0x200fa000),),
                 'patch_ranges': ((0x283827cc, 0x283827cc + 104500),),
             })
